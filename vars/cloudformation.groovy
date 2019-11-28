@@ -4,8 +4,8 @@ cloudformation DSL
 performs cloudformation operations
 
 example usage
-cloudformation
-  stackName: 'dev'
+cloudformation(
+  stackName: 'dev',
   queryType: 'element' | 'output' ,  # either queryType or action should be supplied
   query: 'mysubstack.logicalname1' | 'outputKey', # depending on queryType
   action: 'create'|'update'|'delete'|'exists',
@@ -14,8 +14,15 @@ cloudformation
   parameters: [
     'ENVIRONMENT_NAME' : 'dev',
   ],
-  accountId: '1234567890' #the aws account Id you want the stack operation performed in
-  role: 'myrole' # the role to assume from the account the pipeline is running from
+  accountId: '1234567890', #the aws account Id you want the stack operation performed in
+  role: 'myrole', # the role to assume from the account the pipeline is running from,
+  tags: [
+    'Environment': 'dev'
+  ],
+  snsTopics: [
+    'arn:aws:sns:us-east-2:000000000000:notifications'
+  ],
+  maxErrorRetry: 3
 )
 
 If you omit the templateUrl then for updates it will use the existing template
@@ -40,6 +47,10 @@ import com.amazonaws.services.securitytoken.model.*
 import com.amazonaws.services.simplesystemsmanagement.*
 import com.amazonaws.services.simplesystemsmanagement.model.*
 import com.amazonaws.waiters.*
+import com.amazonaws.ClientConfiguration
+import com.amazonaws.retry.RetryPolicy
+import com.amazonaws.retry.PredefinedRetryPolicies.SDKDefaultRetryCondition
+import com.amazonaws.retry.PredefinedBackoffStrategies.SDKDefaultBackoffStrategy
 import org.yaml.snakeyaml.Yaml
 import groovy.json.JsonSlurperClassic
 import java.util.concurrent.*
@@ -47,7 +58,7 @@ import java.io.InputStreamReader
 
 def call(body) {
   def config = body
-  def cf = setupCfClient(config.region, config.accountId, config.role)
+  def cf = setupCfClient(config.region, config.accountId, config.role, config.maxErrorRetry)
 
   if(!(config.action || config.queryType)){
     throw new GroovyRuntimeException("Either action or queryType (or both) must be specified")
@@ -179,11 +190,25 @@ def create(cf, config) {
   config.parameters.each {
     params << new Parameter().withParameterKey(it.key).withParameterValue(it.value)
   }
-  cf.createStack(new CreateStackRequest()
+  def request = new CreateStackRequest()
     .withStackName(config.stackName)
     .withCapabilities('CAPABILITY_IAM', 'CAPABILITY_NAMED_IAM')
     .withParameters(params)
-    .withTemplateURL(config.templateUrl))
+    .withTemplateURL(config.templateUrl)
+
+  def tags = []
+  config.tags.each {
+    tags << new Tag().withKey(it.key).withValue(it.value)
+  }
+  if (tags.size() > 0) {
+    request.withTags(tags)
+  }
+  
+  if (config.snsTopics) {
+    request.withNotificationARNs(config.snsTopics)
+  }
+  
+  cf.createStack(request)
 }
 
 @NonCPS
@@ -210,11 +235,25 @@ def update(cf, config) {
       .withStackName(config.stackName)
       .withParameters(getStackParams(cf, config))
       .withCapabilities('CAPABILITY_IAM', 'CAPABILITY_NAMED_IAM')
+      
     if(config['templateUrl']) {
       request.withTemplateURL(config.templateUrl)
     } else {
       request.withUsePreviousTemplate(true)
     }
+
+    def tags = []
+    config.tags.each {
+      tags << new Tag().withKey(it.key).withValue(it.value)
+    }
+    if (tags.size() > 0) {
+      request.withTags(tags)
+    }
+    
+    if (config.snsTopics) {
+      request.withNotificationARNs(config.snsTopics)
+    }
+
     try {
       cf.updateStack(request)
       return true
@@ -332,8 +371,14 @@ def doesStackExist(cf, stackName) {
 }
 
 @NonCPS
-def setupCfClient(region, awsAccountId = null, role =  null) {
-  def cb = AmazonCloudFormationClientBuilder.standard().withRegion(region)
+def setupCfClient(region, awsAccountId = null, role =  null, maxErrorRetry=10) {
+  ClientConfiguration clientConfiguration = new ClientConfiguration()
+  maxErrorRetry = (maxErrorRetry == null)? 10 : maxErrorRetry
+  clientConfiguration.withRetryPolicy(new RetryPolicy(new SDKDefaultRetryCondition(), new SDKDefaultBackoffStrategy(), maxErrorRetry, true))
+  
+  def cb = AmazonCloudFormationClientBuilder.standard()
+    .withRegion(region)
+    .withClientConfiguration(clientConfiguration)
   def creds = getCredentials(awsAccountId, region, role)
   if(creds != null) {
     cb.withCredentials(new AWSStaticCredentialsProvider(creds))
@@ -532,7 +577,7 @@ def setCfTemplateUrl(ssm, config, basePath) {
     throw new GroovyRuntimeException("Unable to load CfTemplateUrl ssm param for stack ${config.stackName} from ssm path ${basePath}")
   }
 }
- 
+
 @NonCPS
 def saveStackState(cf, config) {
   def stacks = cf.describeStacks(new DescribeStacksRequest().withStackName(config.stackName)).getStacks()
@@ -558,7 +603,7 @@ def saveStackState(cf, config) {
           .withType('String')
           .withValue(output.outputValue)
           .withOverwrite(true)
-        )        
+        )
       }
       out += "${basePath}/${output.outputKey}=${output.outputValue}\n"
     }

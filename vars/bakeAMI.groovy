@@ -7,6 +7,7 @@
  bakeAMI(region: env.REGION,
    role: 'MyServer',
    baseAMI: 'amzn-ami-hvm-2017.03.*',
+   baseAMIId: 'ami-123456789',
    bakeChefRunList: 'recipe[mycookbook::default]',
    owner: env.BASE_AMI_OWNER,
    client: env.CLIENT,
@@ -16,7 +17,8 @@
    sshUsername: env.SSH_USERNAME,
    chefVersion: '14.10.9',
    disableChefAcceptLicense: 'true|false',
-   debug: 'true|false'
+   debug: 'true|false',
+   bakeryBranch: 'master'
  )
  ************************************/
 
@@ -60,12 +62,13 @@ def call(body) {
   def skipCookbookUpload = config.get('skipCookbookUpload',false)
 
   def role = config.get('role').toUpperCase()
+  def bakeryBranch = config.get('bakeryBranch', 'master')
 
   node {
     println "bake config:${config}"
     deleteDir()
-    git(url: 'https://github.com/base2Services/ciinabox-bakery.git', branch: 'master')
-    def sourceAMI = lookupAMI config
+    git(url: 'https://github.com/base2Services/ciinabox-bakery.git', branch: bakeryBranch)
+    def sourceAMI = (config.baseAMIId) ? config.baseAMIId : lookupAMI(config)
     def branchName = env.BRANCH_NAME.replaceAll("/", "-")
     bakeEnv << "SOURCE_AMI=${sourceAMI}"
     bakeEnv << "BRANCH=${branchName}"
@@ -92,7 +95,7 @@ def call(body) {
       echo "Baking AMI: ${ROLE}"
       echo "AMI Build NO: ${AMI_BUILD_ID}"
       echo "==================================================="
-      ./bakery $CLIENT $ROLE $PACKER_TEMPLATE $PACKER_DEFAULT_PARAMS $AMI_BUILD_ID $SOURCE_AMI $AMI_BUILD_ID $GIT_COMMIT $CHEF_RUN_LIST $PACKER_INSTANCE_TYPE $BAKE_VOLUME_SIZE
+      ./bakery "${CLIENT}" "${ROLE}" "${PACKER_TEMPLATE}" "${PACKER_DEFAULT_PARAMS}" "${AMI_BUILD_ID}" "${SOURCE_AMI}" "${AMI_BUILD_ID}" "${GIT_COMMIT}" "${CHEF_RUN_LIST}" "${PACKER_INSTANCE_TYPE}" "${BAKE_VOLUME_SIZE}"
       if [ $? != 0 ]; then
         echo "ERROR: Packer Baking failed"
         exit 1
