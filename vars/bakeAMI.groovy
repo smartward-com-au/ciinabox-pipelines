@@ -7,13 +7,18 @@
  bakeAMI(region: env.REGION,
    role: 'MyServer',
    baseAMI: 'amzn-ami-hvm-2017.03.*',
+   baseAMIId: 'ami-123456789',
    bakeChefRunList: 'recipe[mycookbook::default]',
    owner: env.BASE_AMI_OWNER,
    client: env.CLIENT,
    shareAmiWith: env.SHARE_AMI_WITH,
    packerTemplate: env.PACKER_TEMPLATE,
    amiBuildNumber: env.AMI_BUILD_NUMBER,
-   sshUsername: env.SSH_USERNAME
+   sshUsername: env.SSH_USERNAME,
+   chefVersion: '14.10.9',
+   disableChefAcceptLicense: 'true|false',
+   debug: 'true|false',
+   bakeryBranch: 'master'
  )
  ************************************/
 
@@ -34,6 +39,7 @@ def call(body) {
   bakeEnv << "BAKE_VOLUME_SIZE=${config.get('bakeVolumeSize', '')}"
   bakeEnv << "DEVICE_NAME=${config.get('deviceName', '')}"
   bakeEnv << "AMI_BUILD_NUMBER=${config.get('amiBuildNumber', env.BUILD_NUMBER)}"
+  bakeEnv << "DEBUG=${config.get('debug', 'false')}"
   if (fileExists('.git/config')) {
     shortCommit = sh(returnStdout: true, script: "git log -n 1 --pretty=format:'%h'").trim()
   } else if(env.GIT_COMMIT != null) {
@@ -43,6 +49,8 @@ def call(body) {
   }
   bakeEnv << "GIT_COMMIT=${shortCommit}"
   bakeEnv << "SSH_USERNAME=${config.get('sshUsername', '')}"
+  bakeEnv << "CHEF_VERSION=${config.get('chefVersion', '')}"
+  bakeEnv << "DISABLE_CHEF_ACCEPT_LICENSE=${config.get('disableChefAcceptLicense', 'false')}"
   config.amiName = config.get('baseAMI')
   config.amiBranch = config.get('baseAMIBranch')
 
@@ -54,18 +62,19 @@ def call(body) {
   def skipCookbookUpload = config.get('skipCookbookUpload',false)
 
   def role = config.get('role').toUpperCase()
+  def bakeryBranch = config.get('bakeryBranch', 'master')
 
   node {
     println "bake config:${config}"
     deleteDir()
-    git(url: 'https://github.com/base2Services/ciinabox-bakery.git', branch: 'master')
-    def sourceAMI = lookupAMI config
+    git(url: 'https://github.com/base2Services/ciinabox-bakery.git', branch: bakeryBranch)
+    def sourceAMI = (config.baseAMIId) ? config.baseAMIId : lookupAMI(config)
     def branchName = env.BRANCH_NAME.replaceAll("/", "-")
     bakeEnv << "SOURCE_AMI=${sourceAMI}"
     bakeEnv << "BRANCH=${branchName}"
     withEnv(bakeEnv) {
       sh './configure $CIINABOX_NAME $REGION $AMI_USERS'
-      
+
       if(skipCookbookUpload) {
         sh 'mkdir -p cookbooks'
       } else {
@@ -86,7 +95,7 @@ def call(body) {
       echo "Baking AMI: ${ROLE}"
       echo "AMI Build NO: ${AMI_BUILD_ID}"
       echo "==================================================="
-      ./bakery $CLIENT $ROLE $PACKER_TEMPLATE $PACKER_DEFAULT_PARAMS $AMI_BUILD_ID $SOURCE_AMI $AMI_BUILD_ID $GIT_COMMIT $CHEF_RUN_LIST $PACKER_INSTANCE_TYPE $BAKE_VOLUME_SIZE
+      ./bakery "${CLIENT}" "${ROLE}" "${PACKER_TEMPLATE}" "${PACKER_DEFAULT_PARAMS}" "${AMI_BUILD_ID}" "${SOURCE_AMI}" "${AMI_BUILD_ID}" "${GIT_COMMIT}" "${CHEF_RUN_LIST}" "${PACKER_INSTANCE_TYPE}" "${BAKE_VOLUME_SIZE}"
       if [ $? != 0 ]; then
         echo "ERROR: Packer Baking failed"
         exit 1
