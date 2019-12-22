@@ -8,7 +8,8 @@ cloudformation(
   stackName: 'dev',
   queryType: 'element' | 'output' ,  # either queryType or action should be supplied
   query: 'mysubstack.logicalname1' | 'outputKey', # depending on queryType
-  action: 'create'|'update'|'delete'|'exists'|'createOrUpdate', # return boolean if anything happened / stack exists
+  action: 'create'|'update'|'delete'|'exists',
+  wait: 'false|true|ready', # Wait for operation to complete. Ready will not kick off an operation but wait for it to reach the end state of the action parameter would do. If no action is specified, it will wait for either UPDATE or COMPLETE to finish. 
   region: 'ap-southeast-2',
   templateUrl: 'https://s3.amazonaws.com/mybucket/cloudformation/app/master.json',
   parameters: [
@@ -65,7 +66,7 @@ def call(body) {
   }
 
   if(config.action){
-    return handleActionRequest(cf, config, config.action)
+    handleActionRequest(cf, config)
   }
 
   if(config.queryType){
@@ -75,58 +76,80 @@ def call(body) {
 }
 
 @NonCPS
-def handleActionRequest(cf, config, action){
-  def success = false
-  def result = false // Did something meaningful happen / does it exist?
-
-  switch(action) {
-    case 'exists':
-      if(doesStackExist(cf,config.stackName)) {
-        println "Environment ${config.stackName} already exists"
-        env["${config.stackName}_exists"] = 'true'
-        result = true
-      } else {
-        println "Environment ${config.stackName} does not exist"
-        env["${config.stackName}_exists"] = 'false'
-      }
-      success = true
-      break
-    case 'create':
-      if(!doesStackExist(cf,config.stackName)) {
-        create(cf, config)
-        success = wait(cf, config.stackName, StackStatus.CREATE_COMPLETE)
-        result = true
-      } else {
-        println "Environment ${config.stackName} already Exists"
-        success = true
-      }
-      break
-    case 'delete':
-      delete(cf, config)
-      success = wait(cf, config.stackName, StackStatus.DELETE_COMPLETE)
-      result = true
-      break
-    case 'update':
-      if(update(cf, config)) {
-        success = wait(cf, config.stackName, StackStatus.UPDATE_COMPLETE)
-        result = true
-      } else {
-        success = true
-      }
-      break
-    case 'createOrUpdate':
-      result = handleActionRequest(cf, config, 'create')
-      if (!result) {
-        result = handleActionRequest(cf, config, 'update')
-      }
-      success = true // Non-successes would have already thrown an exception in recursive calls
-
-  }
-  if(!success) {
+def assert(booleanAssertion, config) {
+  if (!booleanAssertion) {
     printFailedStackEvents(cf, config.stackName, config.region)
     throw new Exception("Stack ${config.stackName} failed to ${config.action}")
   }
-  return result
+}
+
+@NonCPS
+def handleActionRequest(cf, config){
+  def assert = { booleanAssertion ->
+    if (!booleanAssertion) {
+      printFailedStackEvents(cf, config.stackName, config.region)
+      throw new Exception("Stack ${config.stackName} failed to ${config.action}")
+    }
+  }
+
+  // Should start an action
+  if(config.wait != 'ready') {
+    switch(config.action.toUpperCase()) {
+      case 'EXISTS':
+        if(doesStackExist(cf,config.stackName)) {
+          println "Environment ${config.stackName} already exists"
+          env["${config.stackName}_exists"] = 'true'
+        } else {
+          env["${config.stackName}_exists"] = 'false'
+          println "Environment ${config.stackName} does not exist"
+        }
+        return
+      case 'CREATE':
+        if(!doesStackExist(cf,config.stackName)) {
+          create(cf, config)
+
+          // Use to determine if wait: ready should be called.
+          env["${config.stackName}_creating"] = 'true'
+        } else {
+          println "Environment ${config.stackName} already Exists"
+          env["${config.stackName}_creating"] = 'false'
+          return
+        }
+        break
+      case 'DELETE':
+        delete(cf, config)
+        break
+      case 'UPDATE':
+        if(!update(cf, config)) {
+          return
+        }
+      break
+      default:
+        throw new Exception("Stack ${config.stackName} failed to ${config.action}. Unrecognised action")
+    }
+  }
+
+  // Should wait
+  if(config.wait != 'false') {
+    switch(config.action.toUpperCase()) {
+      case 'CREATE':
+        // Be careful using wait: ready and action: create. If the stack was previously created, any create action is a no-op and will not update the state to CREATE_COMPLETE
+        assert(wait(cf, config.stackName, StackStatus.CREATE_COMPLETE))
+        break
+      case 'DELETE':
+        assert(wait(cf, config.stackName, StackStatus.DELETE_COMPLETE))
+        break
+      case 'UPDATE':
+        assert(wait(cf, config.stackName, StackStatus.UPDATE_COMPLETE))
+        break
+      case null:
+      case '':
+        assert(waitUntilComplete(cf, config.stackName))
+        break
+      default:
+        throw new Exception("Stack ${config.stackName} failed to ${config.action}. Unrecognised action to wait on")
+    }
+  }
 }
 
 @NonCPS
