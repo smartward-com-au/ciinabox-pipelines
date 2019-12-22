@@ -9,7 +9,7 @@ cloudformation(
   queryType: 'element' | 'output' ,  # either queryType or action should be supplied
   query: 'mysubstack.logicalname1' | 'outputKey', # depending on queryType
   action: 'create'|'update'|'delete'|'exists',
-  wait: 'false|true|ready', # Wait for operation to complete. Ready will not kick off an operation but wait for it to reach the end state of the action parameter would do. If no action is specified, it will wait for either UPDATE or COMPLETE to finish. 
+  wait: 'false'|'true'|'ready', # Wait for operation to complete. Ready will not kick off an operation but wait for it to reach the end state of the action parameter would do. If no action is specified, it will wait for either UPDATE or COMPLETE to finish. 
   region: 'ap-southeast-2',
   templateUrl: 'https://s3.amazonaws.com/mybucket/cloudformation/app/master.json',
   parameters: [
