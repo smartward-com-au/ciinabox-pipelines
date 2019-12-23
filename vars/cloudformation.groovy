@@ -126,13 +126,19 @@ def handleActionRequest(cf, config){
     switch(config.action.toUpperCase()) {
       case 'CREATE':
         // Be careful using wait: ready and action: create. If the stack was previously created, any create action is a no-op and will not update the state to CREATE_COMPLETE
-        assertOrThrow(wait(cf, config.stackName, StackStatus.CREATE_COMPLETE))
+        if (!doesStackExist(cf, config.stackName, 'CREATE_COMPLETE')) {
+          assertOrThrow(wait(cf, config.stackName, StackStatus.CREATE_COMPLETE))
+        }
         break
       case 'DELETE':
-        assertOrThrow(wait(cf, config.stackName, StackStatus.DELETE_COMPLETE))
+        if (!doesStackExist(cf, config.stackName, 'DELETE_COMPLETE')) {
+          assertOrThrow(wait(cf, config.stackName, StackStatus.DELETE_COMPLETE))
+        }
         break
       case 'UPDATE':
-        assertOrThrow(wait(cf, config.stackName, StackStatus.UPDATE_COMPLETE))
+        if (!doesStackExist(cf, config.stackName, 'UPDATE_COMPLETE')) {
+          assertOrThrow(wait(cf, config.stackName, StackStatus.UPDATE_COMPLETE))
+        }
         break
       case null:
       case '':
@@ -385,10 +391,18 @@ def wait(cf, stackName, successStatus)   {
 }
 
 @NonCPS
-def doesStackExist(cf, stackName) {
+def doesStackExist(cf, stackName, inState = null) {
   try {
     DescribeStacksResult result = cf.describeStacks(new DescribeStacksRequest().withStackName(stackName))
-    return result != null
+    if (result != null) {
+      if (inState == null) {
+        return true
+      } else {
+        return result.getStacks().get(0).getStackStatus() == inState
+      }
+    } else {
+      return false
+    }
   } catch (AmazonCloudFormationException ex) {
     if(ex.message.contains("does not exist")) {
       return false
