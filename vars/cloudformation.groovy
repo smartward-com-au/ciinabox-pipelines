@@ -76,22 +76,14 @@ def call(body) {
 }
 
 @NonCPS
-def assert(booleanAssertion, config) {
-  if (!booleanAssertion) {
-    printFailedStackEvents(cf, config.stackName, config.region)
-    throw new Exception("Stack ${config.stackName} failed to ${config.action}")
-  }
-}
-
-@NonCPS
 def handleActionRequest(cf, config){
-  def assert = { booleanAssertion ->
+  def assertOrThrow = { booleanAssertion ->
     if (!booleanAssertion) {
       printFailedStackEvents(cf, config.stackName, config.region)
       throw new Exception("Stack ${config.stackName} failed to ${config.action}")
     }
   }
-
+  
   // Should start an action
   if(config.wait != 'ready') {
     switch(config.action.toUpperCase()) {
@@ -134,17 +126,17 @@ def handleActionRequest(cf, config){
     switch(config.action.toUpperCase()) {
       case 'CREATE':
         // Be careful using wait: ready and action: create. If the stack was previously created, any create action is a no-op and will not update the state to CREATE_COMPLETE
-        assert(wait(cf, config.stackName, StackStatus.CREATE_COMPLETE))
+        assertOrThrow(wait(cf, config.stackName, StackStatus.CREATE_COMPLETE))
         break
       case 'DELETE':
-        assert(wait(cf, config.stackName, StackStatus.DELETE_COMPLETE))
+        assertOrThrow(wait(cf, config.stackName, StackStatus.DELETE_COMPLETE))
         break
       case 'UPDATE':
-        assert(wait(cf, config.stackName, StackStatus.UPDATE_COMPLETE))
+        assertOrThrow(wait(cf, config.stackName, StackStatus.UPDATE_COMPLETE))
         break
       case null:
       case '':
-        assert(waitUntilComplete(cf, config.stackName))
+        assertOrThrow(waitUntilComplete(cf, config.stackName))
         break
       default:
         throw new Exception("Stack ${config.stackName} failed to ${config.action}. Unrecognised action to wait on")
