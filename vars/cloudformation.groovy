@@ -61,7 +61,7 @@ def call(body) {
   def config = body
   def cf = setupCfClient(config.region, config.accountId, config.role, config.maxErrorRetry)
 
-  if(!(config.action || config.queryType || config.wait.toUpperCase() == 'READY')){
+  if(!(config.action || config.queryType || (config.wait && config.wait.toUpperCase() == 'READY'))){
     throw new GroovyRuntimeException("Either action or queryType (or both) must be specified")
   }
 
