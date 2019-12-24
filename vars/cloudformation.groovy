@@ -143,6 +143,7 @@ def handleActionRequest(cf, config){
       case null:
       case '':
         assertOrThrow(waitUntilComplete(cf, config.stackName))
+        assertOrThrow(doesStackExist(cf, config.stackName, 'CREATE_COMPLETE') || doesStackExist(cf, config.stackName, 'UPDATE_COMPLETE'))
         break
       default:
         throw new Exception("Stack ${config.stackName} failed to ${config.action}. Unrecognised action to wait on")
