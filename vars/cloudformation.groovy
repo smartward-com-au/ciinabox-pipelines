@@ -123,7 +123,7 @@ def handleActionRequest(cf, config){
 
   // Should wait
   if(config.wait != 'false') {
-    switch(config.action.toUpperCase()) {
+    switch(config.action) {
       case 'create':
         // Be careful using wait: ready and action: create. If the stack was previously created, any create action is a no-op and will not update the state to CREATE_COMPLETE
         if (!doesStackExist(cf, config.stackName, 'CREATE_COMPLETE')) {
