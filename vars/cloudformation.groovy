@@ -131,7 +131,7 @@ def handleActionRequest(cf, config){
         }
         break
       case 'DELETE':
-        if (!doesStackExist(cf, config.stackName, 'DELETE_COMPLETE')) {
+        if (doesStackExist(cf, config.stackName) && !doesStackExist(cf, config.stackName, 'DELETE_COMPLETE')) {
           assertOrThrow(wait(cf, config.stackName, StackStatus.DELETE_COMPLETE))
         }
         break
