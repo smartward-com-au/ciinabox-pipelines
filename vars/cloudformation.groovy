@@ -142,7 +142,9 @@ def handleActionRequest(cf, config){
         break
       case null:
       case '':
+        println("Waiting for ${config.stackName}")
         assertOrThrow(waitUntilComplete(cf, config.stackName))
+        println("Confirming state of ${config.stackName}")
         assertOrThrow(doesStackExist(cf, config.stackName, 'CREATE_COMPLETE') || doesStackExist(cf, config.stackName, 'UPDATE_COMPLETE'))
         break
       default:
