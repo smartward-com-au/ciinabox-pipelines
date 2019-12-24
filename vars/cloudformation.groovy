@@ -61,7 +61,7 @@ def call(body) {
   def config = body
   def cf = setupCfClient(config.region, config.accountId, config.role, config.maxErrorRetry)
 
-  if(!(config.action || config.queryType || (config.wait && config.wait.toUpperCase() == 'READY'))){
+  if(!(config.action || config.queryType || config.wait == 'ready')){
     throw new GroovyRuntimeException("Either action or queryType (or both) must be specified")
   }
 
@@ -86,8 +86,8 @@ def handleActionRequest(cf, config){
   
   // Should start an action
   if(config.wait != 'ready') {
-    switch(config.action.toUpperCase()) {
-      case 'EXISTS':
+    switch(config.action) {
+      case 'exists':
         if(doesStackExist(cf,config.stackName)) {
           println "Environment ${config.stackName} already exists"
           env["${config.stackName}_exists"] = 'true'
@@ -96,7 +96,7 @@ def handleActionRequest(cf, config){
           println "Environment ${config.stackName} does not exist"
         }
         return
-      case 'CREATE':
+      case 'create':
         if(!doesStackExist(cf,config.stackName)) {
           create(cf, config)
 
@@ -108,10 +108,10 @@ def handleActionRequest(cf, config){
           return
         }
         break
-      case 'DELETE':
+      case 'delete':
         delete(cf, config)
         break
-      case 'UPDATE':
+      case 'update':
         if(!update(cf, config)) {
           return
         }
@@ -124,18 +124,18 @@ def handleActionRequest(cf, config){
   // Should wait
   if(config.wait != 'false') {
     switch(config.action.toUpperCase()) {
-      case 'CREATE':
+      case 'create':
         // Be careful using wait: ready and action: create. If the stack was previously created, any create action is a no-op and will not update the state to CREATE_COMPLETE
         if (!doesStackExist(cf, config.stackName, 'CREATE_COMPLETE')) {
           assertOrThrow(wait(cf, config.stackName, StackStatus.CREATE_COMPLETE))
         }
         break
-      case 'DELETE':
+      case 'delete':
         if (doesStackExist(cf, config.stackName) && !doesStackExist(cf, config.stackName, 'DELETE_COMPLETE')) {
           assertOrThrow(wait(cf, config.stackName, StackStatus.DELETE_COMPLETE))
         }
         break
-      case 'UPDATE':
+      case 'update':
         if (!doesStackExist(cf, config.stackName, 'UPDATE_COMPLETE')) {
           assertOrThrow(wait(cf, config.stackName, StackStatus.UPDATE_COMPLETE))
         }
