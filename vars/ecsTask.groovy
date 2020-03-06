@@ -28,7 +28,6 @@ import com.amazonaws.services.ecs.model.DescribeClustersRequest
 import com.amazonaws.services.ecs.model.DescribeTasksRequest
 import com.amazonaws.services.ecs.model.PlacementStrategy
 import com.amazonaws.services.ecs.model.PlacementStrategyType
-import com.amazonaws.services.ecs.model.PlacementStrategyType.Spread
 import com.amazonaws.services.ecs.model.RunTaskRequest
 import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClient
 import com.amazonaws.services.securitytoken.model.AssumeRoleRequest
@@ -85,7 +84,7 @@ def startTask(client, config) {
     println "Setting task to run across ${containersInCluster} containers in cluster ${config.cluster}"
     
     def spreadPlacementStrategy = new PlacementStrategy()
-    spreadPlacementStrategy.setType(Spread)
+    spreadPlacementStrategy.setType(PlacementStrategyType.Spread)
     spreadPlacementStrategy.setField("instanceId")
 
     taskRequest.withPlacementStrategy(spreadPlacementStrategy)
