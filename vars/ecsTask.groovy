@@ -2,6 +2,7 @@
 /************************************
 ecsTask (
   action: 'runAndWait',
+  runOnAllRunners: true|false,
   taskDefinition: 'example-task-definition',
   cluster: 'example-cluster',
   region: 'us-east-1',
@@ -23,11 +24,11 @@ import com.amazonaws.auth.BasicSessionCredentials
 import com.amazonaws.services.ecs.*
 import com.amazonaws.services.ecs.model.NetworkConfiguration
 import com.amazonaws.services.ecs.model.AwsVpcConfiguration
-import com.amazonaws.services.ecs.model.DescribeClusterRequest
+import com.amazonaws.services.ecs.model.DescribeClustersRequest
 import com.amazonaws.services.ecs.model.DescribeTasksRequest
-import com.amazonaws.services.ecs.model.PlacementStragety
-import com.amazonaws.services.ecs.model.PlacementStragetyType
-import com.amazonaws.services.ecs.model.PlacementStragetyType.Spread
+import com.amazonaws.services.ecs.model.PlacementStrategy
+import com.amazonaws.services.ecs.model.PlacementStrategyType
+import com.amazonaws.services.ecs.model.PlacementStrategyType.Spread
 import com.amazonaws.services.ecs.model.RunTaskRequest
 import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClient
 import com.amazonaws.services.securitytoken.model.AssumeRoleRequest
@@ -73,7 +74,7 @@ def startTask(client, config) {
   taskRequest.taskDefinition = config.taskDefinition
   
   if (config.runOnAllRunners) {
-    def clusterRequest = new DescribeClusterRequest()
+    def clusterRequest = new DescribeClustersRequest()
     clusterRequest.withClusters(config.cluster)
     def clusterRequestResult = client.describeClusters(clusterRequest)
     def clusterDetails = clusterRequestResult.getClusters()
@@ -83,7 +84,7 @@ def startTask(client, config) {
     def containersInCluster = clusterDetails[0].getRegisteredContainerInstancesCount()
     println "Setting task to run across ${containersInCluster} containers in cluster ${config.cluster}"
     
-    def spreadPlacementStrategy = new PlacementStragety()
+    def spreadPlacementStrategy = new PlacementStrategy()
     spreadPlacementStrategy.setType(Spread)
     spreadPlacementStrategy.setField("instanceId")
 
