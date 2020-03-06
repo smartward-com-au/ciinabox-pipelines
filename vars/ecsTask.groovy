@@ -77,7 +77,7 @@ def startTask(client, config) {
     clusterRequest.withClusters(config.cluster)
     def clusterRequestResult = client.describeClusters(clusterRequest)
     def clusterDetails = clusterRequestResult.getClusters()
-    if (clusterDetails.size != 1) {
+    if (clusterDetails.size() != 1) {
       throw new GroovyRuntimeException("Attempting to describe cluster ${config.cluster} and expected exactly one result but got ${clusterDetails}")
     }
     def containersInCluster = clusterDetails[0].getRegisteredContainerInstancesCount()
