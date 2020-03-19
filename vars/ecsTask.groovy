@@ -2,7 +2,7 @@
 /************************************
 ecsTask (
   action: 'runAndWait',
-  runOnAllRunners: true|false,
+  runOnAllContainers: true|false,
   taskDefinition: 'example-task-definition',
   cluster: 'example-cluster',
   region: 'us-east-1',
@@ -72,7 +72,7 @@ def startTask(client, config) {
   taskRequest.launchType = config.launchType ? config.launchType : "EC2"
   taskRequest.taskDefinition = config.taskDefinition
   
-  if (config.runOnAllRunners) {
+  if (config.runOnAllContainers) {
     def clusterRequest = new DescribeClustersRequest()
     clusterRequest.withClusters(config.cluster)
     def clusterRequestResult = client.describeClusters(clusterRequest)
