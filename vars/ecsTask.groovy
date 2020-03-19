@@ -2,6 +2,7 @@
 /************************************
 ecsTask (
   action: 'runAndWait',
+  runOnAllContainers: true|false,
   taskDefinition: 'example-task-definition',
   cluster: 'example-cluster',
   region: 'us-east-1',
@@ -23,7 +24,10 @@ import com.amazonaws.auth.BasicSessionCredentials
 import com.amazonaws.services.ecs.*
 import com.amazonaws.services.ecs.model.NetworkConfiguration
 import com.amazonaws.services.ecs.model.AwsVpcConfiguration
+import com.amazonaws.services.ecs.model.DescribeClustersRequest
 import com.amazonaws.services.ecs.model.DescribeTasksRequest
+import com.amazonaws.services.ecs.model.PlacementStrategy
+import com.amazonaws.services.ecs.model.PlacementStrategyType
 import com.amazonaws.services.ecs.model.RunTaskRequest
 import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClient
 import com.amazonaws.services.securitytoken.model.AssumeRoleRequest
@@ -67,13 +71,31 @@ def startTask(client, config) {
   taskRequest.withCluster(config.cluster)
   taskRequest.launchType = config.launchType ? config.launchType : "EC2"
   taskRequest.taskDefinition = config.taskDefinition
+  
+  if (config.runOnAllContainers) {
+    def clusterRequest = new DescribeClustersRequest()
+    clusterRequest.withClusters(config.cluster)
+    def clusterRequestResult = client.describeClusters(clusterRequest)
+    def clusterDetails = clusterRequestResult.getClusters()
+    if (clusterDetails.size() != 1) {
+      throw new GroovyRuntimeException("Attempting to describe cluster ${config.cluster} and expected exactly one result but got ${clusterDetails}")
+    }
+    def containersInCluster = clusterDetails[0].getRegisteredContainerInstancesCount()
+    println "Setting task to run across ${containersInCluster} containers in cluster ${config.cluster}"
+    
+    def spreadPlacementStrategy = new PlacementStrategy()
+    spreadPlacementStrategy.setType(PlacementStrategyType.Spread)
+    spreadPlacementStrategy.setField("instanceId")
+
+    taskRequest.withPlacementStrategy(spreadPlacementStrategy)
+    taskRequest.withCount(containersInCluster)
+  }
 
   if (taskRequest.launchType == 'FARGATE') {
     def awsVpcConfiguration = new AwsVpcConfiguration().withSubnets(config.subnets).withSecurityGroups(config.securityGroup)
     def networkConfiguration = new NetworkConfiguration().withAwsvpcConfiguration(awsVpcConfiguration)
     taskRequest.withNetworkConfiguration(networkConfiguration)
   }
-
 
   println "Starting task ${config.taskDefinition} in cluster ${config.cluster}"
   def runResult = client.runTask(taskRequest)
@@ -126,7 +148,7 @@ def wait(client, config, startedTasks) {
 
     def taskDescriptions = client.describeTasks(describeTasksRequest)
     println taskDescriptions
-    if (taskDescriptions.tasks.size() != 1) {
+    if (taskDescriptions.tasks.size() < 1) {
       println "Couldn't find launched task"
       return false
     }
